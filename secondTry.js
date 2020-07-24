@@ -6,21 +6,21 @@
 
 // This module receives:
 // fractionalGraphData: array where each object is: x (elapsed time in seconds), y (temperature), id (Date.now() to use as identifier)
-// serverRunOverview: object {currentBeaker, currentClickCountInBeaker, totalClickCountInBeaker, 
-//                            timeToCompleteBeaker, timeToCompleteRun, startAlcohol, startVolume, message, running}. 
+// serverRunOverview: object {currentBeaker, currentClickCountInBeaker, totalClickCountInBeaker,
+//                            timeToCompleteBeaker, timeToCompleteRun, startAlcohol, startVolume, message, running}.
 
 // import UUID
-const uuidv1 = require('uuid/v1'); 
+const uuidv1 = require('uuid/v1');
 
 // database ORM
 const awsDatabaseOperations = require('./databaseOperations/writeToAWS');
 
 function startFractionalRun(fractionalGraphData, serverRunOverview, fractionalControlSystem) {
     // physical parameters and relay mapping
-    const collectionCoefficient = 1.75;
-    const lastFractionForHeads = 5;
-    const lastFractionForHearts = 16;
-    const preHeatEndTemperature = 45;
+    // const collectionCoefficient = 1.75;
+    // const lastFractionForHeads = 5;
+    // const lastFractionForHearts = 16;
+    // const preHeatEndTemperature = 45;
     const batchID = uuidv1();
 
     let startTime = Date.now();
@@ -29,6 +29,12 @@ function startFractionalRun(fractionalGraphData, serverRunOverview, fractionalCo
     let fractionalControlSystemLocal = fractionalControlSystem;
     let overallRunArray = [];
     let positionInOverallArray=0;
+
+    let collectionCoefficient = serverRunOverviewLocal.collectionCoefficient;
+    let lastFractionForHeads = serverRunOverviewLocal.lastFractionForHeads;
+    let lastFractionForHearts = serverRunOverviewLocal.lastFractionForHearts;
+    let preHeatEndTemperature = serverRunOverviewLocal.preHeatEndTemperature;
+
 
     convertAlcoholToDecimal = function() {
         serverRunOverviewLocal.startAlcohol = parseFloat(serverRunOverviewLocal.startAlcohol);
@@ -39,13 +45,13 @@ function startFractionalRun(fractionalGraphData, serverRunOverview, fractionalCo
         }
         return true;
     };
-    
+
     convertVolumeToDecimal = function() {
         serverRunOverviewLocal.startVolume = parseFloat(serverRunOverviewLocal.startVolume)*1000;
         if (serverRunOverviewLocal.startVolume <= 0) {
             return false;
         }
-        return true; 
+        return true;
     };
 
     moveArmForTime = function(moveTimeInMilliseconds, direction) {
@@ -53,13 +59,13 @@ function startFractionalRun(fractionalGraphData, serverRunOverview, fractionalCo
             fractionalControlSystemLocal.retractArm.setState(false);
             fractionalControlSystemLocal.extendArm.setState(true);
             setTimeout( () => {
-                fractionalControlSystemLocal.extendArm.setState(false) 
+                fractionalControlSystemLocal.extendArm.setState(false)
             }, moveTimeInMilliseconds);
         } else {
             fractionalControlSystemLocal.extendArm.setState(false);
             fractionalControlSystemLocal.retractArm.setState(true);
             setTimeout( () => {
-                fractionalControlSystemLocal.retractArm.setState(false) 
+                fractionalControlSystemLocal.retractArm.setState(false)
             }, moveTimeInMilliseconds);
         }
     };
@@ -72,7 +78,7 @@ function startFractionalRun(fractionalGraphData, serverRunOverview, fractionalCo
         let volumeTails = volumeEthanol * 0.05;
         let volumeHearts = volumeEthanol - (volumeMethanol + volumeTails + volumeHeads);
         let beakerArray = [];
-    
+
         // build target volumes for each beaker
         for (let i = 0; i<21; i++) {
             let beakerInformation = {
@@ -83,24 +89,24 @@ function startFractionalRun(fractionalGraphData, serverRunOverview, fractionalCo
             if (i==0) {
                 // methanol
                 beakerInformation.targetVolume = volumeMethanol;
-            }  
+            }
             if (i>0 && i<4) {
                 // heads
-                beakerInformation.targetVolume = volumeHeads * collectionCoefficient / 3;               
-            } 
+                beakerInformation.targetVolume = volumeHeads * collectionCoefficient / 3;
+            }
             if (i>=4 && i<=17) {
                 // hearts
-                beakerInformation.targetVolume = volumeHearts * collectionCoefficient / 14;               
-            } 
+                beakerInformation.targetVolume = volumeHearts * collectionCoefficient / 14;
+            }
             if (i>17) {
                 // tails
-                beakerInformation.targetVolume = volumeTails * collectionCoefficient / 3;               
+                beakerInformation.targetVolume = volumeTails * collectionCoefficient / 3;
                 beakerInformation.overallFraction = 'Tails';
             }
             beakerInformation.beakerID=i;
-            beakerArray[i]= beakerInformation; 
+            beakerArray[i]= beakerInformation;
         }
-    
+
         for (let i = 0; i<21; i++) {
             let clickCount = Math.floor(beakerArray[i].targetVolume / 3.32);
             beakerArray[i].cycleCount = clickCount;
@@ -127,7 +133,7 @@ function startFractionalRun(fractionalGraphData, serverRunOverview, fractionalCo
             }
         }
 
-        
+
 
         // move arm after beakers
         beakerArray[lastFractionForHeads].nextFunction = () => { moveArmForTime(9000, 'extend') };
@@ -216,28 +222,28 @@ function startFractionalRun(fractionalGraphData, serverRunOverview, fractionalCo
     function runEnclosingArrayCycle(fractionInformation) {
         // recursive function.  Terminates when end of array is met
         let fractionCounter = 0;
-    
+
         function runOneCycle() {
             fractionalControlSystemLocal.solenoid.setState(true);
             setTimeout(endOpenValve, 500);
         };
-        
+
         function endOpenValve() {
             fractionalControlSystemLocal.solenoid.setState(false);
             setTimeout(waitUntilNextCycle, fractionInformation.closeTime);
         };
 
-        
-    
+
+
         function waitUntilNextCycle() {
             fractionCounter++;
             serverRunOverviewLocal.currentClickCountInBeaker=fractionCounter;
-            
+
             // Breakpoint for cycles within one beaker
             if (fractionCounter < fractionInformation.cycleCount) {
                 runOneCycle();
             } else {
-                // move to next beaker in overall array                
+                // move to next beaker in overall array
                 positionInOverallArray++;
                 console.log(`moving to next beaker ${positionInOverallArray}`);
                 // updateBeakerEndTimes();
@@ -246,7 +252,7 @@ function startFractionalRun(fractionalGraphData, serverRunOverview, fractionalCo
                     // run end of fraction function; currently only used to move actuator arm
                     fractionInformation.nextFunction();
                     console.log(`moved actuator arm`);
-                } 
+                }
                 // if there's another beaker in array, run its cycle
                 if (positionInOverallArray<overallRunArray.length) {
                     serverRunOverviewLocal.currentBeaker = positionInOverallArray;
@@ -270,7 +276,7 @@ function startFractionalRun(fractionalGraphData, serverRunOverview, fractionalCo
 
 
     // **********************************  Main program ********************************** //
-    
+
     // Tell server that the program is running and set key timepoints
     serverRunOverviewLocal.running=true;
     serverRunOverviewLocal.timeStarted = startTime;
@@ -296,7 +302,7 @@ function startFractionalRun(fractionalGraphData, serverRunOverview, fractionalCo
     let startingTemperature = fractionalControlSystemLocal.tempProbe.getTemperature();
     console.log(`Starting Temperature is ${startingTemperature}`)
     let temperatureLogInterval = setInterval(logTemperature, 60*1000);
-    
+
     // Turn on heating element
     fractionalControlSystemLocal.heatingElement.setState(true);
     console.log(`Heating element turned on`);
@@ -318,7 +324,7 @@ function startFractionalRun(fractionalGraphData, serverRunOverview, fractionalCo
                 serverRunOverviewLocal.currentBeaker = 0;
                 serverRunOverviewLocal.totalClickCountInBeaker = overallRunArray[0].cycleCount;
                 serverRunOverviewLocal.message = overallRunArray[0].overallFraction;
-                
+
                 // This starts the core fractional program.  Passes in first beaker's paramaters
                 runEnclosingArrayCycle(overallRunArray[0]);
             }, 10*60*1000);
