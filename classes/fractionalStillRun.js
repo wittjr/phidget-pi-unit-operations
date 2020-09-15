@@ -1,99 +1,222 @@
 'use strict';
-
 const { v4: uuidv4 } = require('uuid');
 
-class FractionalStill {
-  _busy = false;
-  _run = undefined;
-  _temperature = undefined;
+class FractionalStillRun {
+  _logger;
+  _db;
+  _still;
+  _input;
+  _preHeatTime;
+  _runArray;
+  _batchID;
+  _startTime;
+  _currentBeaker = '';
+  _currentClickCountInBeaker = '';
+  _totalClickCountInBeaker = '';
+  _timeToCompleteBeaker = '';
+  _timeToCompleteRun = '';
+  _timePreHeatComplete = '';
+  _startAlcohol = 0;
+  _startVolume = 0;
+  _running = false;
+  _currentTemperature = 0;
+  _message = 'new Fractional Still Run created';
 
   constructor(options) {
     this._logger = options.logger;
     this._db = options.db;
-    this._heatingElement = options.heatingElement;
-    this._solenoid = options.solenoid;
-    this._tempProbe = options.tempProbe;
-    this._extendArm = options.extendArm;
-    this._retractArm = options.retractArm;
+    this._still = options.still;
+    this._input = options.input;
+    this._batchID = uuidv4();
+    this.startRun();
   }
 
-  get busy() {
-    return this._busy;
-  }
-
-  set busy(value) {
-    this._busy = value;
-  }
-
-  get run() {
-    return this._run;
-  }
-
-  set run(value) {
-    this._run = value;
-  }
-
-  get temperature() {
-    this._temperature = this._tempProbe.getTemperature();
-    return this._temperature;
-  }
-
-  get heatStatus() {
-    return this._heatingElement.getState();
-  }
-
-  _changePhidgetState(phidget, value) {
-    phidget.setState(value);
-  }
-
-  openSolenoid() {
-    this._changePhidgetState(this._solenoid, true);
-  }
-
-  closeSolenoid() {
-    this._changePhidgetState(this._solenoid, false);
-  }
-
-  turnHeatOn() {
-    this._changePhidgetState(this._heatingElement, true);
-  }
-
-  turnHeatOff() {
-    this._changePhidgetState(this._heatingElement, false);
-  }
-
-  resetArm() {
-    this._moveArmForTime(30000, 'retract');
-  }
-
-  moveArmForHearts() {
-    this._moveArmForTime(9000, 'extend');
-  }
-
-  moveArmForTails() {
-    this._moveArmForTime(11000, 'extend');
-  }
-
-  _moveArmForTime(moveTimeInMilliseconds, direction) {
-    this._logger.debug('Still requested to ' + direction + ' arm for ' + moveTimeInMilliseconds/1000 + ' seconds');
-    if (direction == 'extend') {
-      this._changePhidgetState(this._retractArm, false);
-      this._changePhidgetState(this._extendArm, true);
-      setTimeout( () => {
-        this._logger.debug('Finished arm ' + direction);
-        this._changePhidgetState(this._extendArm, false);
-      }, moveTimeInMilliseconds);
-    } else {
-      this._changePhidgetState(this._extendArm, false);
-      this._changePhidgetState(this._retractArm, true);
-      setTimeout( () => {
-        this._logger.debug('Finished arm ' + direction);
-        this._changePhidgetState(this._retractArm, false);
-      }, moveTimeInMilliseconds);
+  getRunStatus() {
+    return {
+      running: this._running,
+      currentTemperature: this._currentTemperature
     }
-  };
+  }
 
-  //Previous volume based run
+  get timeStarted() {
+    return this._timeStarted;
+  }
+
+  get message() {
+    return this._message;
+  }
+
+  get running() {
+    return this._running;
+  }
+
+  get _currentTemperature() {
+    return this._currentTemperature;
+  }
+
+  _setMessage(message) {
+    this._logger.info(message);
+    this._message = message;
+  }
+
+  _logTemperature() {
+    const fractionalTemp = this._still.temperature;
+    const now = Date.now();
+    this._currentTemperature = fractionalTemp;
+    let timePointData = {
+        batchID:this._batchID,
+        epochtime:now,
+        temperature:fractionalTemp,
+        elapsedtime:((now - this._startTime)/(1000*60)),
+        messageID:''
+    };
+    this._db.writeStillTimepoint(timePointData, 'fractional');
+  }
+
+  _endFractionalRun() {
+    this._still.turnHeatOff();
+    this._message = `Heating element is turned off.  Waiting five minutes to drain still`;
+    this._still.openSolenoid();
+    this._logger.info(`Heating element off, solenoid open`)
+    setTimeout(() => {
+      const now = (new Date()).toLocaleString();
+      this._still.closeSolenoid();
+      this._logger.info(`Completed at ${now}. Solenoid is now closed`)
+      this._message = `Run completed at ${now}`;
+      this._db.finishRun({
+        result: {
+          endTime: Date.now(),
+          timePreHeatComplete: this._timePreHeatComplete,
+          message: this._message
+        }
+      }, 'factional');
+    }, 5*60*1000);
+  }
+
+  _sleep(seconds) {
+    const date = Date.now();
+    let currentDate = null;
+    do {
+      currentDate = Date.now();
+    } while (currentDate - date < seconds*1000);
+  }
+
+  _controlHeat(temp, time) {
+    this._setMessage(`Heating to ${temp} and holding for ${time}`);
+    if (this._still.temperature < (temp - 1) && !this._still.heatStatus) {
+      this._still.turnHeatOn();
+    }
+    while (true) {
+      const currentTemp = this._still.temperature;
+      if (currentTemp > (temp - 1)) {
+        this._setMessage(`Temp, ${currentTemp}, within 1 degree of target ${temp}`);
+        break;
+      }
+      this._sleep(5);
+    }
+
+    this._setMessage(`Reached temp ${temp}, holding for ${time}`);
+    const endTime = Date.now() + time*60*1000;
+    while (Date.now() < endTime) {
+      const currentTemp = this._still.temperature;
+      this._setMessage(`Temperature check ${currentTemp}`);
+      if (currentTemp > (temp + 1) && this._still.heatStatus) {
+        this._setMessage(`Turning off heat`);
+        this._still.turnHeatOff();
+      } else if (currentTemp < (temp - 1) && !this._still.heatStatus) {
+        this._setMessage(`Turning on heat`);
+        this._still.turnHeatOn();
+      }
+      this._sleep(5);
+    }
+  }
+
+  _collectHeads() {
+    this._setMessage('Begin collecting heads');
+    this._still.openSolenoid();
+    this._controlHeat(this._input.headsTemp, this._input.headsTime);
+    this._still.closeSolenoid();
+  }
+
+  _collectHearts() {
+    this._setMessage('Begin collecting hearts');
+    this._still.moveArmForHearts();
+    this._still.openSolenoid();
+    this._controlHeat(this._input.heartsTemp, this._input.heartsTime);
+    this._still.closeSolenoid();
+  }
+
+  _collectTails() {
+    this._setMessage('Begin collecting tails');
+    this._still.moveArmForTails();
+    this._still.openSolenoid();
+    this._controlHeat(98, 0);
+    this._still.closeSolenoid();
+  }
+
+  startRun() {
+    this._still.busy = true;
+    this._still.run = this;
+    this._startTime = Date.now();
+    this._logger.info('Starting run with input: ' + JSON.stringify(this._input));
+    const preHeatTimeLimit = (this._input.preHeatTime * 60 * 60 * 1000) + this._startTime;
+
+    this._running=true;
+
+    const runData = {
+      batchID: this._batchID,
+      startTime: this._startTime,
+      input: this._input
+    };
+    this._db.createRun(runData, 'fractional');
+
+    this._logger.info('Fractional run started: ' + (new Date(this._startTime)).toLocaleString());
+    this._logger.info('Fractional still preheat limit: ' + (new Date(preHeatTimeLimit)).toLocaleString());
+
+    // Retract arm
+    this._logger.info('Retracting arm for 30 seconds');
+    this._still.resetArm();
+
+    // Turn on temperature logging
+    this._logger.info('Initiating Temperature logging');
+    const startingTemperature = this._still.temperature;
+    this._logger.info(`Starting Temperature is ${startingTemperature}`)
+    // const temperatureLogInterval = setInterval(() => {this._logTemperature()}, 60*1000);
+    const temperatureLogInterval = setInterval(this._logTemperature.bind(this), 60*1000);
+
+    // Turn on heating element
+    this._still.turnHeatOn();
+    this._logger.info('Heating element turned on');
+    this._setMessage('Pre-heating System');
+
+    // Monitor temperature until target pre-heat temperature is hit
+    this._logger.info(`pre-heating system until temperature reaches ${this._input.preHeatEndTemperature}`);
+    const preheatCheck = setInterval( () => {
+      const currentTemperature = this._still.temperature;
+      if (currentTemperature > this._input.preHeatEndTemperature) {
+        this._timePreHeatComplete = Date.now();
+        clearInterval(preheatCheck);
+
+        // This starts the core fractional program.  Passes in first beaker's paramaters
+        // runEnclosingArrayCycle(overallRunArray[0]);
+        this._collectHeads();
+        this._collectHearts();
+        this._collectTails();
+        this._endFractionalRun();
+        clearInterval(temperatureLogInterval);
+      } else if (Date.now() > preHeatTimeLimit) {
+        // Took to long to preheat, shut it down
+        this._setMessage('Took to long to preheat, shutting down');
+        this._email.sendMail('wittjr@gmail.com', 'Fractional still error', serverRunOverview.message);
+        clearInterval(preheatCheck);
+        this._still.run = undefined;
+        this._still.busy = false;
+        this._endFractionalRun();
+        clearInterval(temperatureLogInterval);
+      }
+    }, 1*60*1000);
+  }
+
   startFractionalRun(fractionalGraphData, serverRunOverview, fractionalControlSystem) {
       // physical parameters and relay mapping
       // const collectionCoefficient = 1.75;
@@ -131,27 +254,27 @@ class FractionalStill {
       const moveArmForTime = (moveTimeInMilliseconds, direction) => {
           if (direction == 'extend') {
               fractionalControlSystemLocal.retractArm.setState(false).catch(function (err) {
-                logger.error('setState failed: ' +  JSON.stringify(err));
-              });
+			          logger.error('setState failed: ' +  JSON.stringify(err));
+		          });
               fractionalControlSystemLocal.extendArm.setState(true).catch(function (err) {
-                logger.error('setState failed: ' +  JSON.stringify(err));
-              });
+			          logger.error('setState failed: ' +  JSON.stringify(err));
+		          });
               setTimeout( () => {
                   fractionalControlSystemLocal.extendArm.setState(false).catch(function (err) {
-                    logger.error('setState failed: ' +  JSON.stringify(err));
-                  });
+    			          logger.error('setState failed: ' +  JSON.stringify(err));
+    		          });
               }, moveTimeInMilliseconds);
           } else {
               fractionalControlSystemLocal.extendArm.setState(false).catch(function (err) {
-                logger.error('setState failed: ' +  JSON.stringify(err));
-              });
+			          logger.error('setState failed: ' +  JSON.stringify(err));
+		          });
               fractionalControlSystemLocal.retractArm.setState(true).catch(function (err) {
-                logger.error('setState failed: ' +  JSON.stringify(err));
-              });
+			          logger.error('setState failed: ' +  JSON.stringify(err));
+		          });
               setTimeout( () => {
                   fractionalControlSystemLocal.retractArm.setState(false).catch(function (err) {
-                    logger.error('setState failed: ' +  JSON.stringify(err));
-                  });
+    			          logger.error('setState failed: ' +  JSON.stringify(err));
+    		          });
               }, moveTimeInMilliseconds);
           }
       };
@@ -348,15 +471,15 @@ class FractionalStill {
 
           function runOneCycle() {
               fractionalControlSystemLocal.solenoid.setState(true).catch(function (err) {
-                logger.error('setState failed: ' +  JSON.stringify(err));
-              });
+			          logger.error('setState failed: ' +  JSON.stringify(err));
+		          });
               setTimeout(endOpenValve, 500);
           };
 
           function endOpenValve() {
               fractionalControlSystemLocal.solenoid.setState(false).catch(function (err) {
-                logger.error('setState failed: ' +  JSON.stringify(err));
-              });
+			          logger.error('setState failed: ' +  JSON.stringify(err));
+		          });
               setTimeout(waitUntilNextCycle, fractionInformation.closeTime);
           };
 
@@ -477,4 +600,4 @@ class FractionalStill {
   };
 }
 
-module.exports = FractionalStill;
+module.exports = FractionalStillRun;

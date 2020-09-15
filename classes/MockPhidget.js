@@ -29,6 +29,11 @@ class MockPhidget {
     return new Promise(() => {});
   }
 
+  getState() {
+    this.logger.debug(this.name + ': Current state: ' + this.state);
+    return this.state;
+  }
+
   getTemperature() {
     const currentTemp = this.temperature;
     const thisTimeCheck = Date.now();

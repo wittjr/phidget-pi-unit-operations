@@ -7,8 +7,9 @@ const winston = require('./config/winston');
 const router = express.Router();
 const phidget22 = require('phidget22');
 const Data = require('./config/sqlite');
-const PotStill = require('./classes/potstill.js');
-const FractionalStill = require('./classes/fractionalstill.js');
+const PotStill = require('./classes/potStill.js');
+const FractionalStill = require('./classes/fractionalStill.js');
+const FractionalStillRun = require('./classes/fractionalStillRun.js');
 
 // ***********************************************   Unit Ops Module Imports   ****************************************
 // const fractionalStill = require('./secondTry');
@@ -118,11 +119,6 @@ const potStill = new PotStill({
   logger: winston
 });
 
-const fractionalStill = new FractionalStill({
-  db: data,
-  logger: winston
-});
-
 if(sim_mode) {
   winston.debug('Skipping connection to phidget server');
   const MockPhidget = require('./classes/MockPhidget.js');
@@ -145,6 +141,16 @@ if(sim_mode) {
       process.exit(1);
     });
 }
+
+const fractionalStill = new FractionalStill({
+  db: data,
+  logger: winston,
+  heatingElement: fractionalControlSystem.heatingElement,
+  solenoid: fractionalControlSystem.solenoid,
+  tempProbe: fractionalControlSystem.tempProbe,
+  extendArm: fractionalControlSystem.extendArm,
+  retractArm: fractionalControlSystem.retractArm
+});
 
 async function initializePhidgetBoards( fractionalControlSystem, potControlSystem) {
   let heatingElement = new phidget22.DigitalOutput();
@@ -429,19 +435,26 @@ router.route('/setfractional')
     fractionalGraphData=[];
     winston.info(JSON.stringify(serverRunOverview));
     fractionalStill.startFractionalRun(fractionalGraphData,serverRunOverview,fractionalControlSystem);
+    // serverRunOverview.fractionalStillRun = new FractionalStillRun({
+    //   db: data,
+    //   logger: winston,
+    //   still: fractionalStill,
+    //   input: serverRunOverview
+    // });
     res.json({
-      message:'started simple program'
+      message:'started fractional run'
     });
   })
 
-router.route('/fractionalstatus')
-  .get((req,res) => {
-    winston.info('front end asked what is the pot status')
-    winston.info(`server status is ${serverRunOverview.running}`);
-    res.json({
-      serverFractionalStatus:serverRunOverview.running
-    });
-  })
+// router.route('/fractionalstatus')
+//   .get((req,res) => {
+//     winston.debug('front end asked what is the fractional still status')
+//     // winston.debug(`server status is ${serverRunOverview.fractionalStillRun.running}`);
+//     winston.debug(`server status is ${fractionalStill.busy}`);
+//     res.json({
+//       serverFractionalStatus:fractionalStill.busy
+//     });
+//   })
 
 router.route('/fractionalgraphdata')
   .get((req,res) => {
@@ -453,16 +466,67 @@ router.route('/fractionalgraphdata')
 
 router.route('/fractionalsummary')
   .get((req,res) => {
-    winston.info('front end asked for fractional summary')
+    winston.debug('front end asked for fractional summary')
+    // let respData = {
+    //   running: false,
+    //   currentTemperature: 0,
+    //   message:''
+    // };
+    // if (fractionalStill.busy) {
+    //   respData = fractionalStill.run.getRunStatus();
+    // }
+    // winston.debug(JSON.stringify(respData));
     res.json({
       serverRunOverview:serverRunOverview
+      //serverRunOverview:respData
     });
   })
+
+router.route('/startFractionalRun').post((req,res) => {
+  let fractionalStillInitiatingValues = JSON.parse(req.body.fractionalStillInitiatingValues, (key, value) =>
+    isNaN(value)
+    ? value
+    : parseFloat(value)
+  );
+  winston.info(JSON.stringify(fractionalStillInitiatingValues));
+  const fractionalStillRun = new FractionalStillRun({
+    db: data,
+    logger: winston,
+    still: fractionalStill,
+    input: fractionalStillInitiatingValues
+  });
+  res.json({
+    message:'started fractional still run'
+  });
+})
+
+router.route('/fractionalStillSummary').get((req, res) => {
+  winston.debug('front end asked for fractional still summary');
+  let respData = {
+    running: false,
+    currentTemperature: 0,
+    message:''
+  };
+  if (fractionalStill.busy) {
+    respData = fractionalStill.run.getRunStatus();
+  }
+  winston.debug(JSON.stringify(respData));
+  res.json({
+    serverRunOverview:respData
+  });
+})
+
+router.route('/fractionalStillGraphData').get((req,res) => {
+  winston.info('front end asked for fractional still graph data')
+  res.json({
+    fractionalGraphData:fractionalGraphData
+  });
+})
 
 router.route('/extendarm')
   .get((req,res) => {
     let confirmationMessage = fractionalStillSingleInteraction.handleIndividualFractionalInteraction(fractionalControlSystem, 'extendArm');
-    winston.info(`turning on heat`);
+    winston.info(`extending arm`);
     res.json({
       message:confirmationMessage
     });
@@ -471,7 +535,7 @@ router.route('/extendarm')
 router.route('/retractarm')
   .get((req,res) => {
     let confirmationMessage = fractionalStillSingleInteraction.handleIndividualFractionalInteraction(fractionalControlSystem, 'retractArm');
-    winston.info(`turning on heat`);
+    winston.info(`retracting arm`);
     res.json({
       message:confirmationMessage
     });
@@ -505,7 +569,7 @@ router.route('/fracchecktemp')
 router.route('/openvalve')
   .get((req,res) => {
     let confirmationMessage = fractionalStillSingleInteraction.handleIndividualFractionalInteraction(fractionalControlSystem, 'openValve');
-    winston.info(`turning on heat`);
+    winston.info(`opening valve`);
     res.json({
       message:confirmationMessage
     });
@@ -514,7 +578,7 @@ router.route('/openvalve')
 router.route('/closevalve')
   .get((req,res) => {
     let confirmationMessage = fractionalStillSingleInteraction.handleIndividualFractionalInteraction(fractionalControlSystem, 'closeValve');
-    winston.info(`turning on heat`);
+    winston.info(`closing valve`);
     res.json({
       message:confirmationMessage
     });
@@ -522,17 +586,17 @@ router.route('/closevalve')
 
 
 // ***********************************************   Phidget Test Routes   ****************************************
-router.route('/simplifiedprogram')
-  .get((req,res) => {
-    serverRunOverview.startAlcohol=.3;
-    serverRunOverview.startVolume=38.8;
-    serverFractionalStatus=req.body.desiredFractionalState;
-    fractionalGraphData=[];
-    fractionalStill.startFractionalRun(fractionalGraphData,serverRunOverview,fractionalControlSystem);
-    res.json({
-      message:'started simple program'
-    });
-  })
+// router.route('/simplifiedprogram')
+//   .get((req,res) => {
+//     serverRunOverview.startAlcohol=.3;
+//     serverRunOverview.startVolume=38.8;
+//     serverFractionalStatus=req.body.desiredFractionalState;
+//     fractionalGraphData=[];
+//     fractionalStill.startFractionalRun(fractionalGraphData,serverRunOverview,fractionalControlSystem);
+//     res.json({
+//       message:'started simple program'
+//     });
+//   })
 
 router.route('*')
   .get((req,res) => {
