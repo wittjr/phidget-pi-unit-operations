@@ -26,7 +26,12 @@ class MockPhidget {
     }
     this.state=value;
     this.logger.debug(this.name + ': State set to: ' + this.state);
-    return new Promise(() => {});
+    return new Promise((resolve, reject) => {
+      setTimeout(() => {
+        resolve();
+        return;
+      }, 1*1000);
+    });
   }
 
   getState() {

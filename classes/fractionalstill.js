@@ -42,54 +42,62 @@ class FractionalStill {
     return this._heatingElement.getState();
   }
 
-  _changePhidgetState(phidget, value) {
-    phidget.setState(value);
+  async _changePhidgetState(phidget, value) {
+    await phidget.setState(value);
   }
 
-  openSolenoid() {
-    this._changePhidgetState(this._solenoid, true);
+  async openSolenoid() {
+    await this._changePhidgetState(this._solenoid, true);
   }
 
-  closeSolenoid() {
-    this._changePhidgetState(this._solenoid, false);
+  async closeSolenoid() {
+    await this._changePhidgetState(this._solenoid, false);
   }
 
-  turnHeatOn() {
-    this._changePhidgetState(this._heatingElement, true);
+  async turnHeatOn() {
+    await this._changePhidgetState(this._heatingElement, true);
   }
 
-  turnHeatOff() {
-    this._changePhidgetState(this._heatingElement, false);
+  async turnHeatOff() {
+    await this._changePhidgetState(this._heatingElement, false);
   }
 
-  resetArm() {
-    this._moveArmForTime(30000, 'retract');
+  async resetArm() {
+    await this._moveArmForTime(30000, 'retract');
   }
 
-  moveArmForHearts() {
-    this._moveArmForTime(9000, 'extend');
+  async moveArmForHearts() {
+    await this._moveArmForTime(9000, 'extend');
   }
 
-  moveArmForTails() {
-    this._moveArmForTime(11000, 'extend');
+  async moveArmForTails() {
+    await this._moveArmForTime(11000, 'extend');
   }
 
-  _moveArmForTime(moveTimeInMilliseconds, direction) {
+  async _moveArmForTime(moveTimeInMilliseconds, direction) {
     this._logger.debug('Still requested to ' + direction + ' arm for ' + moveTimeInMilliseconds/1000 + ' seconds');
     if (direction == 'extend') {
-      this._changePhidgetState(this._retractArm, false);
-      this._changePhidgetState(this._extendArm, true);
-      setTimeout( () => {
-        this._logger.debug('Finished arm ' + direction);
-        this._changePhidgetState(this._extendArm, false);
-      }, moveTimeInMilliseconds);
+      await this._changePhidgetState(this._retractArm, false);
+      await this._changePhidgetState(this._extendArm, true);
+      await new Promise((resolve, reject) => {
+        setTimeout( () => {
+          this._changePhidgetState(this._extendArm, false).then(() => {
+            resolve();
+            return;
+          });
+        }, moveTimeInMilliseconds);
+      });
     } else {
-      this._changePhidgetState(this._extendArm, false);
-      this._changePhidgetState(this._retractArm, true);
-      setTimeout( () => {
-        this._logger.debug('Finished arm ' + direction);
-        this._changePhidgetState(this._retractArm, false);
-      }, moveTimeInMilliseconds);
+      await this._changePhidgetState(this._extendArm, false);
+      await this._changePhidgetState(this._retractArm, true);
+      await new Promise((resolve, reject) => {
+        setTimeout( () => {
+          this._changePhidgetState(this._retractArm, false).then(() => {
+            resolve();
+            return;
+          });
+        }, moveTimeInMilliseconds);
+      });
     }
   };
 
