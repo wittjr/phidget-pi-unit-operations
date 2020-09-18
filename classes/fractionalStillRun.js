@@ -77,25 +77,27 @@ class FractionalStillRun {
 
   _endFractionalRun() {
     this._still.turnHeatOff();
-    this._message = `Heating element is turned off.  Waiting five minutes to drain still`;
     this._still.openSolenoid();
-    this._logger.info(`Heating element off, solenoid open`)
+    this._setMessage(`Heating element off, solenoid open. Waiting five minutes to drain still`);
     return new Promise((resolve, reject) => {
       setTimeout(() => {
         const now = (new Date()).toLocaleString();
-        this._still.closeSolenoid();
-        this._logger.info(`Completed at ${now}. Solenoid is now closed`)
-        this._message = `Run completed at ${now}`;
-        this._db.finishRun({
-          result: {
-            endTime: Date.now(),
-            timePreHeatComplete: this._timePreHeatComplete,
-            message: this._message
-          }
-        }, 'factional');
-        this._running = false;
-        this._still.busy = false;
-        resolve();
+        this._still.closeSolenoid().then(() => {
+          this._still.resetArm().then(() => {
+            this._setMessage(`Run completed at ${now}.`)
+            this._db.finishRun({
+              result: {
+                endTime: Date.now(),
+                timePreHeatComplete: this._timePreHeatComplete,
+                message: this._message
+              }
+            }, 'factional');
+            this._running = false;
+            this._still.busy = false;
+            resolve();
+            return;            
+          });
+        });
       }, 5*60*1000);
     });
   }
@@ -110,14 +112,20 @@ class FractionalStillRun {
 
   _heatToTemp(temp, timeLimit) {
     const heatStartTime = Date.now();
-    this._logger.info(`Heating to ${temp} by ${timeLimit}`);
+    if (timeLimit) {
+      this._logger.info(`Heating to ${temp} by ${timeLimit} minutes`);
+    } else {
+      this._logger.info(`Heating to ${temp}`);
+    }
     if (this._still.temperature < temp && !this._still.heatStatus) {
       this._still.turnHeatOn();
     }
 
     return new Promise((resolve, reject) => {
 
-      let interval = 1000;
+      let interval = 5*1000;
+      let lastTemp = 0;
+      let avgDegreesPerSecond = 0;
       const intervalFunction = () => {
         const currentTemp = this._still.temperature;
         clearInterval(bringToTempInterval);
@@ -127,42 +135,86 @@ class FractionalStillRun {
         } else if (timeLimit && Date.now() > (heatStartTime + (timeLimit*60*1000))) {
           this._setMessage('Took to long to heat');
         } else {
-          interval = interval + 1000;
-          console.error('increasing interval ' + interval);
+          // Calculate new interval
+          if (lastTemp > 0) {
+            let tempChange = currentTemp - lastTemp;
+            avgDegreesPerSecond = tempChange/(interval/1000);
+            let tempLeft = temp - currentTemp;
+            interval = (Math.floor(tempLeft/avgDegreesPerSecond))/5;
+            interval = (interval < 1) ? interval = 1000 : Math.floor(interval) * 1000;
+            this._logger.debug('New temp check interval: ' + interval);
+          }
+          lastTemp = currentTemp;
           bringToTempInterval = setInterval(intervalFunction, interval);
         }
 
       }
-      var bringToTempInterval = setInterval(intervalFunction, interval);
-
-      // const bringToTempInterval = setInterval(() => {
-      //   const currentTemp = this._still.temperature;
-      //   if (currentTemp >= temp) {
-      //     this._setMessage(`Target temperature, ${temp}, reached ${currentTemp}`);
-      //     clearInterval(bringToTempInterval);
-      //     resolve();
-      //   }
-      // }, 5*1000);
-    })
+      let bringToTempInterval = setInterval(intervalFunction, interval);
+    });
   }
 
   _monitorTemp(temp, endTime) {
     return new Promise((resolve, reject) => {
-      const monitorTempInterval = setInterval(() => {
+      let interval = 1000;
+      let lastTemp = 0;
+      let avgDegreesPerSecond = 0;
+      const tempTolerance = 0.5;
+
+      const intervalFunction = () => {
         const currentTemp = this._still.temperature;
         this._setMessage(`Temperature check ${currentTemp}`);
-        if (currentTemp > (temp + 1) && this._still.heatStatus) {
+        clearInterval(monitorTempInterval);
+        let tempStateChanged = false;
+        let targetTemp = temp + tempTolerance;
+
+        if (currentTemp >= (temp + 1) && this._still.heatStatus) {
           this._setMessage(`Turning off heat`);
+          tempStateChanged = true;
+          targetTemp = temp - tempTolerance;
           this._still.turnHeatOff();
-        } else if (currentTemp < (temp - 1) && !this._still.heatStatus) {
+        } else if (currentTemp <= (temp - tempTolerance) && !this._still.heatStatus) {
           this._setMessage(`Turning on heat`);
+          targetTemp = temp + tempTolerance;
+          tempStateChanged = true;
           this._still.turnHeatOn();
         }
         if (Date.now() >= endTime) {
-          clearInterval(monitorTempInterval);
           resolve();
+          return;
         }
-      }, 5*1000);
+        // Calculate new interval
+        if (tempStateChanged) {
+          interval = 1000;
+          this._logger.debug('New temp check interval due to heat change: ' + interval);
+        } else if (lastTemp > 0) {
+          let tempChange = currentTemp - lastTemp;
+          avgDegreesPerSecond = tempChange/(interval/1000);
+          let tempLeft = Math.abs(targetTemp - currentTemp);
+          interval = (Math.floor(tempLeft/avgDegreesPerSecond))/5;
+          interval = (interval < 1) ? interval = 1000 : Math.floor(interval) * 1000;
+          this._logger.debug('New temp check interval: ' + interval);
+        }
+        lastTemp = currentTemp;
+        monitorTempInterval = setInterval(intervalFunction, interval);
+      }
+
+      // const monitorTempInterval = setInterval(() => {
+      //   const currentTemp = this._still.temperature;
+      //   this._setMessage(`Temperature check ${currentTemp}`);
+      //   if (currentTemp > (temp + 1) && this._still.heatStatus) {
+      //     this._setMessage(`Turning off heat`);
+      //     this._still.turnHeatOff();
+      //   } else if (currentTemp < (temp - 1) && !this._still.heatStatus) {
+      //     this._setMessage(`Turning on heat`);
+      //     this._still.turnHeatOn();
+      //   }
+      //   if (Date.now() >= endTime) {
+      //     clearInterval(monitorTempInterval);
+      //     resolve();
+      //   }
+      // }, 5*1000);
+
+      let monitorTempInterval = setInterval(intervalFunction, interval);
     });
   }
 
@@ -252,7 +304,7 @@ class FractionalStillRun {
     this._setMessage('Begin collecting tails');
     await this._still.moveArmForTails();
     await this._still.openSolenoid();
-    await this._controlHeat(98, 0);
+    await this._controlHeat(99, 0);
     await this._still.closeSolenoid();
   }
 
@@ -277,8 +329,6 @@ class FractionalStillRun {
 
     // Retract arm
     this._logger.info('Retracting arm for 30 seconds');
-    // this._logger.error(this._still.resetArm());
-    // this._still.resetArm().then(() => {this._logger.info('Finished retracting arm')});
     await this._still.resetArm();
     this._logger.info('Finished retracting arm');
 
@@ -296,29 +346,37 @@ class FractionalStillRun {
 
     // Monitor temperature until target pre-heat temperature is hit
     this._logger.info(`pre-heating system until temperature reaches ${this._input.preHeatEndTemperature}`);
-    const preheatCheck = setInterval( () => {
-      const currentTemperature = this._still.temperature;
-      if (currentTemperature > this._input.preHeatEndTemperature) {
-        this._timePreHeatComplete = Date.now();
-        clearInterval(preheatCheck);
-        (async () => {
-          await this._collectHeads();
-          await this._collectHearts();
-          await this._collectTails();
-          await this._endFractionalRun();
-          clearInterval(temperatureLogInterval);
-        }) ();
-      } else if (Date.now() > preHeatTimeLimit) {
-        // Took to long to preheat, shut it down
-        this._setMessage('Took to long to preheat, shutting down');
-        this._email.sendMail('wittjr@gmail.com', 'Fractional still error', serverRunOverview.message);
-        clearInterval(preheatCheck);
-        this._still.run = undefined;
-        this._still.busy = false;
-        this._endFractionalRun();
-        clearInterval(temperatureLogInterval);
-      }
-    }, 1*60*1000);
+    await this._heatToTemp(this._input.preHeatEndTemperature, this._input.preHeatTime * 60);
+    this._timePreHeatComplete = Date.now();
+    await this._collectHeads();
+    await this._collectHearts();
+    await this._collectTails();
+    await this._endFractionalRun();
+    clearInterval(temperatureLogInterval);
+
+    // const preheatCheck = setInterval( () => {
+    //   const currentTemperature = this._still.temperature;
+    //   if (currentTemperature > this._input.preHeatEndTemperature) {
+    //     this._timePreHeatComplete = Date.now();
+    //     clearInterval(preheatCheck);
+    //     (async () => {
+    //       await this._collectHeads();
+    //       await this._collectHearts();
+    //       await this._collectTails();
+    //       await this._endFractionalRun();
+    //       clearInterval(temperatureLogInterval);
+    //     }) ();
+    //   } else if (Date.now() > preHeatTimeLimit) {
+    //     // Took to long to preheat, shut it down
+    //     this._setMessage('Took to long to preheat, shutting down');
+    //     this._email.sendMail('wittjr@gmail.com', 'Fractional still error', serverRunOverview.message);
+    //     clearInterval(preheatCheck);
+    //     this._still.run = undefined;
+    //     this._still.busy = false;
+    //     this._endFractionalRun();
+    //     clearInterval(temperatureLogInterval);
+    //   }
+    // }, 1*60*1000);
   }
 }
 
