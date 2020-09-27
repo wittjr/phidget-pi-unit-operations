@@ -3,12 +3,12 @@ const { SMTPClient } = require('emailjs');
 class EmailClient {
   constructor(options) {
     this.logger = options.logger;
-    this.emailUser = 'hhgsmtp@gmail.com';
+    this.emailUser = options.user;
     this.emailClient = new SMTPClient({
       user: this.emailUser,
-    	password: 'smtpP@ssw0rd',
-    	host: 'smtp.gmail.com',
-    	ssl: true,
+    	password: options.password,
+    	host: options.server,
+    	ssl: options.ssl,
     });
   }
 

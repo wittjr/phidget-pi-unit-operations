@@ -3,6 +3,8 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const morgan = require('morgan');
 const winston = require('./config/winston');
+const propertiesReader = require('properties-reader');
+const fs = require('fs');
 // const log = require('./logging/Logger').customLogger;
 const router = express.Router();
 const phidget22 = require('phidget22');
@@ -10,13 +12,23 @@ const Data = require('./config/sqlite');
 const PotStill = require('./classes/potStill.js');
 const FractionalStill = require('./classes/fractionalStill.js');
 const FractionalStillRun = require('./classes/fractionalStillRun.js');
+const Email = require('./config/email');
 
 // ***********************************************   Unit Ops Module Imports   ****************************************
 // const fractionalStill = require('./secondTry');
 const fractionalStillSingleInteraction = require('./fractionalstillinteractions');
 // const potStill = require('./unitOperations/potStill');
 // ***********************************************   Express Server Setup   *******************************************
-const PORT = 3001;
+let propertiesFile = '.env.development.properties';
+try {
+  fs.accessSync(propertiesFile, fs.constants.R_OK | fs.constants.F_OK);
+} catch (err) {
+  console.log(err.message);
+  propertiesFile = '.env.properties';
+}
+const properties = propertiesReader(propertiesFile);
+
+const PORT = properties.get('server.port') | 3001;
 const app = express();
 
 //ADDED
@@ -86,7 +98,7 @@ let serverRunOverview = {
   startVolume: 0,
   running:false,
   currentTemperature:0,
-  running:false,
+  // running:false,
   // startingBeaker:0,
   message:''
 };
@@ -98,16 +110,19 @@ let fractionalControlSystem = {
   tempProbe:''
 };
 
+let fractionalStillRun = undefined;
+
 // ***********************************************   Phidget Board Initialization ************************************
 var SERVER_PORT = 5661;
 var hostName = '127.0.0.1';
 
-let sim_mode = false;
-let db_location ='./data/pinetop.db';
-if (process.argv.length > 2 && process.argv[2] == 'sim') {
-  sim_mode = true;
-  db_location = './data/sample.db';
-}
+let db_location = properties.get('server.db');
+let sim_mode = properties.get('dev.sim') | false;
+// let db_location ='./data/pinetop.db';
+// if (process.argv.length > 2 && process.argv[2] == 'sim') {
+//   sim_mode = true;
+//   db_location = './data/sample.db';
+// }
 
 let data = new Data({
   location: db_location,
@@ -117,6 +132,14 @@ let data = new Data({
 const potStill = new PotStill({
   db: data,
   logger: winston
+});
+
+const email = new Email({
+  logger: winston,
+  user: properties.get('smtp.user'),
+  password: properties.get('smtp.password'),
+  server: properties.get('smtp.server'),
+  ssl: properties.get('smtp.ssl') | false
 });
 
 if(sim_mode) {
@@ -145,6 +168,7 @@ if(sim_mode) {
 const fractionalStill = new FractionalStill({
   db: data,
   logger: winston,
+  email: email,
   heatingElement: fractionalControlSystem.heatingElement,
   solenoid: fractionalControlSystem.solenoid,
   tempProbe: fractionalControlSystem.tempProbe,
@@ -434,6 +458,7 @@ router.route('/setfractional')
 
     fractionalGraphData=[];
     winston.info(JSON.stringify(serverRunOverview));
+    serverRunOverview.notifyEmail = properties.get('smtp.notify')
     fractionalStill.startFractionalRun(fractionalGraphData,serverRunOverview,fractionalControlSystem);
     // serverRunOverview.fractionalStillRun = new FractionalStillRun({
     //   db: data,
@@ -467,19 +492,19 @@ router.route('/fractionalgraphdata')
 router.route('/fractionalsummary')
   .get((req,res) => {
     winston.debug('front end asked for fractional summary')
-    // let respData = {
-    //   running: false,
-    //   currentTemperature: 0,
-    //   message:''
-    // };
-    // if (fractionalStill.busy) {
-    //   respData = fractionalStill.run.getRunStatus();
-    // }
-    // winston.debug(JSON.stringify(respData));
-    res.json({
-      serverRunOverview:serverRunOverview
-      //serverRunOverview:respData
-    });
+    if (fractionalStill.busy) {
+      res.json({
+        serverRunOverview: fractionalStillRun.getRunStatus()
+      });
+    } else if (serverRunOverview.running) {
+      res.json({
+        serverRunOverview:serverRunOverview
+      });
+    } else {
+      res.json({
+        serverRunOverview:serverRunOverview
+      });
+    }
   })
 
 router.route('/startFractionalRun').post((req,res) => {
@@ -489,15 +514,23 @@ router.route('/startFractionalRun').post((req,res) => {
     : parseFloat(value)
   );
   winston.info(JSON.stringify(fractionalStillInitiatingValues));
-  const fractionalStillRun = new FractionalStillRun({
-    db: data,
-    logger: winston,
-    still: fractionalStill,
-    input: fractionalStillInitiatingValues
-  });
-  res.json({
-    message:'started fractional still run'
-  });
+  if (fractionalStill.busy) {
+    res.json({
+      message:'fraction still already busy'
+    });
+  } else {
+    fractionalStillRun = new FractionalStillRun({
+      db: data,
+      logger: winston,
+      still: fractionalStill,
+      input: fractionalStillInitiatingValues,
+      email: email,
+      notify: properties.get('smtp.notify')
+    });
+    res.json({
+      message:'started fractional still run'
+    });
+  }
 })
 
 router.route('/fractionalStillSummary').get((req, res) => {
@@ -518,9 +551,22 @@ router.route('/fractionalStillSummary').get((req, res) => {
 
 router.route('/fractionalStillGraphData').get((req,res) => {
   winston.info('front end asked for fractional still graph data')
-  res.json({
-    fractionalGraphData:fractionalGraphData
-  });
+  if (fractionalStill.busy && fractionalStill.run) {
+    data.getTimePoints(fractionalStill.run.id, (data) => {
+      history = data;
+      const newDataPoints = [];
+      history.forEach((datapoint) => {
+        newDataPoints.push({
+          x: (new Date(datapoint.timestamp)).toLocaleTimeString(),
+          y: datapoint.temperature,
+          id: datapoint.timestamp
+        });
+      });
+      res.json({
+        fractionalGraphData: newDataPoints
+      })
+    });
+  }
 })
 
 router.route('/extendarm')

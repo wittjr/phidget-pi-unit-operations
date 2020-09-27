@@ -6,6 +6,8 @@ class FractionalStillRun {
   _db;
   _still;
   _input;
+  _email;
+  _emailNotify;
   _preHeatTime;
   _runArray;
   _batchID;
@@ -28,6 +30,8 @@ class FractionalStillRun {
     this._db = options.db;
     this._still = options.still;
     this._input = options.input;
+    this._email = options.email;
+    this._emailNotify = options.notify;
     this._batchID = uuidv4();
     this.startRun();
   }
@@ -36,8 +40,13 @@ class FractionalStillRun {
     return {
       running: this._running,
       currentTemperature: this._currentTemperature,
+      message: this._message,
       type: this._type
     }
+  }
+
+  get id() {
+    return this._batchID;
   }
 
   get timeStarted() {
@@ -86,8 +95,9 @@ class FractionalStillRun {
           this._still.resetArm().then(() => {
             this._setMessage(`Run completed at ${now}.`)
             this._db.finishRun({
+              batchID: this._batchID,
+              endTime: Date.now(),
               result: {
-                endTime: Date.now(),
                 timePreHeatComplete: this._timePreHeatComplete,
                 message: this._message
               }
@@ -95,20 +105,20 @@ class FractionalStillRun {
             this._running = false;
             this._still.busy = false;
             resolve();
-            return;            
+            return;
           });
         });
       }, 5*60*1000);
     });
   }
 
-  _sleep(seconds) {
-    const date = Date.now();
-    let currentDate = null;
-    do {
-      currentDate = Date.now();
-    } while (currentDate - date < seconds*1000);
-  }
+  // _sleep(seconds) {
+  //   const date = Date.now();
+  //   let currentDate = null;
+  //   do {
+  //     currentDate = Date.now();
+  //   } while (currentDate - date < seconds*1000);
+  // }
 
   _heatToTemp(temp, timeLimit) {
     const heatStartTime = Date.now();
@@ -134,6 +144,7 @@ class FractionalStillRun {
           resolve();
         } else if (timeLimit && Date.now() > (heatStartTime + (timeLimit*60*1000))) {
           this._setMessage('Took to long to heat');
+          this._email.sendMail(this._emailNotify, 'Fractional still error', this.message);
         } else {
           // Calculate new interval
           if (lastTemp > 0) {
@@ -304,7 +315,7 @@ class FractionalStillRun {
     this._setMessage('Begin collecting tails');
     await this._still.moveArmForTails();
     await this._still.openSolenoid();
-    await this._controlHeat(99, 0);
+    await this._controlHeat(this._input.tailsTemp, this._input.tailsTime);
     await this._still.closeSolenoid();
   }
 
@@ -369,7 +380,7 @@ class FractionalStillRun {
     //   } else if (Date.now() > preHeatTimeLimit) {
     //     // Took to long to preheat, shut it down
     //     this._setMessage('Took to long to preheat, shutting down');
-    //     this._email.sendMail('wittjr@gmail.com', 'Fractional still error', serverRunOverview.message);
+    //     this._email.sendMail('', 'Fractional still error', serverRunOverview.message);
     //     clearInterval(preheatCheck);
     //     this._still.run = undefined;
     //     this._still.busy = false;

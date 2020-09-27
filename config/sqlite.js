@@ -23,9 +23,11 @@ class Data {
         batchID text,
         operation text,
         starttime integer,
+        enttime integer,
         input text,
         result text
       )`);
+      this.db.run(`ALTER TABLE rundata ADD endtime integer`);
     });
   }
 
@@ -45,6 +47,7 @@ class Data {
     this.logger.debug('DB: Finish run ' + JSON.stringify(runData));
     this.db.serialize(() => {
       this.db.run(`UPDATE rundata SET
+        endtime = '` +  runData.endTime + `',
         result = '` + JSON.stringify(runData.result) + `'
         WHERE batchID = '` +  runData.batchID + `'`);
     });

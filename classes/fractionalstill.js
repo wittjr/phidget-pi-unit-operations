@@ -6,10 +6,14 @@ class FractionalStill {
   _busy = false;
   _run = undefined;
   _temperature = undefined;
+  _db;
+  _logger;
+  _email;
 
   constructor(options) {
     this._logger = options.logger;
     this._db = options.db;
+    this._email = options.email;
     this._heatingElement = options.heatingElement;
     this._solenoid = options.solenoid;
     this._tempProbe = options.tempProbe;
@@ -116,9 +120,12 @@ class FractionalStill {
       let fractionalControlSystemLocal = fractionalControlSystem;
       let overallRunArray = [];
       let positionInOverallArray=0;
-      const logger = this.logger;
-      const db = this.db;
-      const email = this.email;
+      const logger = this._logger;
+      this.logger = logger;
+      const db = this._db;
+      this.db = db;
+      const email = this._email;
+      this.email = email;
 
       const collectionCoefficient = serverRunOverviewLocal.collectionCoefficient;
       const lastFractionForHeads = serverRunOverviewLocal.lastFractionForHeads;
@@ -476,7 +483,7 @@ class FractionalStill {
             // Took to long to preheat, shut it down
             serverRunOverviewLocal.message = 'Took to long to preheat, shutting down';
             this.logger.info(serverRunOverviewLocal.message);
-            this.email.sendMail('wittjr@gmail.com', 'Fractional still error', serverRunOverviewLocal.message);
+            this.email.sendMail(serverRunOverviewLocal.notifyEmail, 'Fractional still error', serverRunOverviewLocal.message);
             clearInterval(preheatCheck);
             endFractionalRun();
           }
