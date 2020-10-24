@@ -105,4 +105,4 @@ dist
 .tern-port
 
 # local test DB
-data/sample.db
+data/*.db
