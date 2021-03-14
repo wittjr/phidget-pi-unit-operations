@@ -534,7 +534,7 @@ router.route('/startFractionalRun').post((req,res) => {
 })
 
 router.route('/fractionalStillSummary').get((req, res) => {
-  winston.debug('front end asked for fractional still summary');
+  //winston.debug('front end asked for fractional still summary');
   let respData = {
     running: false,
     currentTemperature: 0,
@@ -543,7 +543,7 @@ router.route('/fractionalStillSummary').get((req, res) => {
   if (fractionalStill.busy) {
     respData = fractionalStill.run.getRunStatus();
   }
-  winston.debug(JSON.stringify(respData));
+  //winston.debug(JSON.stringify(respData));
   res.json({
     serverRunOverview:respData
   });
