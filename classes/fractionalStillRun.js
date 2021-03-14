@@ -350,6 +350,11 @@ class FractionalStillRun {
     // const temperatureLogInterval = setInterval(() => {this._logTemperature()}, 60*1000);
     const temperatureLogInterval = setInterval(this._logTemperature.bind(this), 60*1000);
 
+    const totalTimeLimit = setTimeout(() => {
+      this._logger.info('Hit 15 hour limit');
+      await this._endFractionalRun();
+    }, 15*60*60*1000);
+
     // Turn on heating element
     this._still.turnHeatOn();
     this._logger.info('Heating element turned on');
@@ -363,6 +368,7 @@ class FractionalStillRun {
     await this._collectHearts();
     await this._collectTails();
     await this._endFractionalRun();
+    clearInterval(totalTimeLimit);
     clearInterval(temperatureLogInterval);
 
     // const preheatCheck = setInterval( () => {

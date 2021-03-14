@@ -478,7 +478,7 @@ class FractionalStill {
 
                   // This starts the core fractional program.  Passes in first beaker's paramaters
                   runEnclosingArrayCycle(overallRunArray[0]);
-              }, 10*60*1000);
+              }, 1000);
           } else if (Date.now() > preHeatTimeLimit) {
             // Took to long to preheat, shut it down
             serverRunOverviewLocal.message = 'Took to long to preheat, shutting down';
