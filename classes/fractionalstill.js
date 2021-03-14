@@ -280,6 +280,7 @@ class FractionalStill {
           try {
             fractionalTemp = fractionalControlSystemLocal.tempProbe.getTemperature();
           } catch (err) {logger.error('setState failed: ' +  JSON.stringify(err));}
+          logger.debug('fractionalStill.logTemperature: ' + fractionalTemp);
           let dataPoint = {}
           const now = Date.now();
           dataPoint.y = fractionalTemp;
@@ -365,6 +366,7 @@ class FractionalStill {
               fractionalControlSystemLocal.solenoid.setState(true).catch(function (err) {
                 logger.error('setState failed: ' +  JSON.stringify(err));
               });
+              logger.debug('fractionalStill.runEnclosingArrayCycle: opened solenoid');
               setTimeout(endOpenValve, 500);
           };
 
@@ -372,6 +374,7 @@ class FractionalStill {
               fractionalControlSystemLocal.solenoid.setState(false).catch(function (err) {
                 logger.error('setState failed: ' +  JSON.stringify(err));
               });
+              logger.debug('fractionalStill.runEnclosingArrayCycle: closed solenoid');
               setTimeout(waitUntilNextCycle, fractionInformation.closeTime);
           };
 

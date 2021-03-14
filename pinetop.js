@@ -208,16 +208,16 @@ async function initializePhidgetBoards( fractionalControlSystem, potControlSyste
   var tempProbe = new phidget22.TemperatureSensor();
   tempProbe.setHubPort(1);
   tempProbe.setChannel(1);
-  tempProbe.setDataInterval(500);
   await tempProbe.open();
+  tempProbe.setDataInterval(500);
   fractionalControlSystem.tempProbe = tempProbe;
   winston.info('temp probe attached');
 
   var columnTemperature = new phidget22.TemperatureSensor();
   columnTemperature.setHubPort(1);
   columnTemperature.setChannel(0);
-  columnTemperature.setDataInterval(500);
   await columnTemperature.open();
+  columnTemperature.setDataInterval(500);
   potControlSystem.columnTemperature = columnTemperature;
   winston.info('pot temp probe attached');
 
@@ -260,7 +260,7 @@ router.route('/potsummary')
 
 router.route('/potgraphdata')
   .get((req,res) => {
-    winston.info('front end asked for graph data')
+    //winston.info('front end asked for graph data')
     res.json({
       potGraphData:potGraphData
     });
@@ -483,7 +483,7 @@ router.route('/setfractional')
 
 router.route('/fractionalgraphdata')
   .get((req,res) => {
-    winston.info('front end asked for graph data')
+    //winston.info('front end asked for graph data')
     res.json({
       fractionalGraphData:fractionalGraphData
     });
@@ -491,7 +491,7 @@ router.route('/fractionalgraphdata')
 
 router.route('/fractionalsummary')
   .get((req,res) => {
-    winston.debug('front end asked for fractional summary')
+    //winston.debug('front end asked for fractional summary')
     if (fractionalStill.busy) {
       res.json({
         serverRunOverview: fractionalStillRun.getRunStatus()

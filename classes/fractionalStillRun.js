@@ -169,7 +169,7 @@ class FractionalStillRun {
       let interval = 1000;
       let lastTemp = 0;
       let avgDegreesPerSecond = 0;
-      const tempTolerance = 0.5;
+      const tempTolerance = 1.0;
 
       const intervalFunction = () => {
         const currentTemp = this._still.temperature;
@@ -352,7 +352,7 @@ class FractionalStillRun {
 
     const totalTimeLimit = setTimeout(() => {
       this._logger.info('Hit 15 hour limit');
-      await this._endFractionalRun();
+      this._endFractionalRun();
     }, 15*60*60*1000);
 
     // Turn on heating element
