@@ -684,7 +684,7 @@ router.route('/fractionalstill/heat').post((req, res) => {
         await fractionalStill.turnHeatOff()
     }
     res.json({
-      message: fractionalStill.heatStatus
+      state: fractionalStill.heatStatus
     });
   })()
 })
@@ -710,14 +710,14 @@ router.route('/fractionalstill/solenoid').post((req, res) => {
         await fractionalStill.closeSolenoid()
     }
     res.json({
-      message: fractionalStill.solenoidStatus
+      state: fractionalStill.solenoidStatus
     });
   })()
 })
 .get((req, res) => {
   winston.info('checking solenoid state')
   res.json({
-    message: fractionalStill.solenoidStatus
+    state: fractionalStill.solenoidStatus
   });
 })
 

@@ -58,31 +58,38 @@ class FractionalStill {
   }
 
   async openSolenoid() {
+    logger.debug('Attempting to open solenoid');
     await this._changePhidgetState(this._solenoid, true);
   }
 
   async closeSolenoid() {
+    logger.debug('Attempting to close solenoid');
     await this._changePhidgetState(this._solenoid, false);
   }
 
   async turnHeatOn() {
+    logger.debug('Attempting to turn heat on');
     await this._changePhidgetState(this._heatingElement, true);
   }
 
   async turnHeatOff() {
+    logger.debug('Attempting to turn heat off');
     await this._changePhidgetState(this._heatingElement, false);
   }
 
   async resetArm() {
-    await this._moveArmForTime(30000, 'retract');
+    logger.debug('Attempting to reset arm');
+    await this._moveArmForTime(25000, 'retract');
   }
 
   async moveArmForHearts() {
-    await this._moveArmForTime(9000, 'extend');
+    logger.debug('Attempting to set arm for hearts');
+    await this._moveArmForTime(11000, 'extend');
   }
 
   async moveArmForTails() {
-    await this._moveArmForTime(11000, 'extend');
+    logger.debug('Attempting to set arm for tails');
+    await this._moveArmForTime(10000, 'extend');
   }
 
   async _moveArmForTime(moveTimeInMilliseconds, direction) {
