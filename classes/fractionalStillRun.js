@@ -108,7 +108,7 @@ class FractionalStillRun {
             return;
           });
         });
-      }, 5*60*1000);
+      }, 15*60*1000);
     });
   }
 

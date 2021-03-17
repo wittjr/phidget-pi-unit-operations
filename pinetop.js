@@ -142,6 +142,12 @@ const email = new Email({
   ssl: properties.get('smtp.ssl') | false
 });
 
+const fractionalStill = new FractionalStill({
+  db: data,
+  logger: winston,
+  email: email
+});
+
 if(sim_mode) {
   winston.debug('Skipping connection to phidget server');
   const MockPhidget = require('./classes/MockPhidget.js');
@@ -150,6 +156,15 @@ if(sim_mode) {
   fractionalControlSystem.retractArm = new MockPhidget({name: 'fractional_arm_retract',logger: winston, isTempSensor: false});
   fractionalControlSystem.extendArm = new MockPhidget({name: 'fractional_arm_extend', logger: winston, isTempSensor: false});
   fractionalControlSystem.tempProbe = fractionalControlSystem.heatingElement;
+
+  fractionalStill.setStillComponents({
+    heatingElement: fractionalControlSystem.heatingElement,
+    solenoid: fractionalControlSystem.solenoid,
+    tempProbe: fractionalControlSystem.tempProbe,
+    extendArm: fractionalControlSystem.extendArm,
+    retractArm: fractionalControlSystem.retractArm
+  });
+
   potControlSystem.potHeatingElement = new MockPhidget({name: 'pot_heat', logger: winston, isTempSensor: true});
   potControlSystem.potHeatingElementHighVoltage = new MockPhidget({name: 'pot_heat_high_voltage', logger: winston, isTempSensor: false});
   potControlSystem.columnTemperature = potControlSystem.potHeatingElement;
@@ -157,26 +172,15 @@ if(sim_mode) {
 } else {
   winston.info('Phidget connecting');
   var conn = new phidget22.Connection(SERVER_PORT, hostName, { name: 'Server Connection', passwd: '' });
-  conn.connect(fractionalControlSystem, potControlSystem)
-    .then(initializePhidgetBoards(fractionalControlSystem, potControlSystem))
+  conn.connect(fractionalControlSystem, potControlSystem, fractionalStill)
+    .then(initializePhidgetBoards(fractionalControlSystem, potControlSystem, fractionalStill))
     .catch(function (err) {
       winston.error('Error connecting to phidget:', err.message);
       process.exit(1);
     });
 }
 
-const fractionalStill = new FractionalStill({
-  db: data,
-  logger: winston,
-  email: email,
-  heatingElement: fractionalControlSystem.heatingElement,
-  solenoid: fractionalControlSystem.solenoid,
-  tempProbe: fractionalControlSystem.tempProbe,
-  extendArm: fractionalControlSystem.extendArm,
-  retractArm: fractionalControlSystem.retractArm
-});
-
-async function initializePhidgetBoards( fractionalControlSystem, potControlSystem) {
+async function initializePhidgetBoards(fractionalControlSystem, potControlSystem, fractionalStill) {
   let heatingElement = new phidget22.DigitalOutput();
   heatingElement.setHubPort(0);
   heatingElement.setChannel(0);
@@ -236,6 +240,15 @@ async function initializePhidgetBoards( fractionalControlSystem, potControlSyste
   winston.info('pot heating element attached');
 
   winston.info(`Fractional still control system established`);
+
+  fractionalStill.setStillComponents({
+    heatingElement: fractionalControlSystem.heatingElement,
+    solenoid: fractionalControlSystem.solenoid,
+    tempProbe: fractionalControlSystem.tempProbe,
+    extendArm: fractionalControlSystem.extendArm,
+    retractArm: fractionalControlSystem.retractArm
+  });
+
   return true;
 }
 
@@ -630,6 +643,83 @@ router.route('/closevalve')
     });
   })
 
+router.route('/fractionalstill/movearm').post((req, res) => {
+  (async () => {
+    winston.info(JSON.stringify(req.body));
+    let result = 'failed to move arm';
+    switch(req.body.position) {
+      case 'heads':
+        await fractionalStill.resetArm()
+        result = 'set arm to heads position'
+        break
+      case 'hearts':
+        await fractionalStill.moveArmForHearts()
+        result = 'set arm to hearts position'
+        break
+      case 'tails':
+        await fractionalStill.moveArmForTails()
+        result = 'set arm to tails position'
+        break
+      default:
+        await fractionalStill.resetArm()
+        result = 'set arm to heads position'
+    }
+    res.json({
+      message: result
+    });
+  })()
+})
+
+router.route('/fractionalstill/heat').post((req, res) => {
+  (async () => {
+    winston.info(JSON.stringify(req.body));
+    switch (req.body.state) {
+      case 'on':
+        await fractionalStill.turnHeatOn()
+        break
+      case 'off':
+        await fractionalStill.turnHeatOff()
+        break
+      default:
+        await fractionalStill.turnHeatOff()
+    }
+    res.json({
+      message: fractionalStill.heatStatus
+    });
+  })()
+})
+.get((req, res) => {
+  winston.info('checking temperature');
+  winston.info(fractionalStill);
+  res.json({
+    message: fractionalStill.temperature
+  });
+})
+
+router.route('/fractionalstill/solenoid').post((req, res) => {
+  (async () => {
+    winston.info(JSON.stringify(req.body))
+    switch (req.body.state) {
+      case 'open':
+        await fractionalStill.openSolenoid()
+        break
+      case 'close':
+        await fractionalStill.closeSolenoid()
+        break
+      default:
+        await fractionalStill.closeSolenoid()
+    }
+    res.json({
+      message: fractionalStill.solenoidStatus
+    });
+  })()
+})
+.get((req, res) => {
+  winston.info('checking solenoid state')
+  res.json({
+    message: fractionalStill.solenoidStatus
+  });
+})
 
 // ***********************************************   Phidget Test Routes   ****************************************
 // router.route('/simplifiedprogram')

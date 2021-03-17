@@ -14,6 +14,9 @@ class FractionalStill {
     this._logger = options.logger;
     this._db = options.db;
     this._email = options.email;
+  }
+
+  setStillComponents(options) {
     this._heatingElement = options.heatingElement;
     this._solenoid = options.solenoid;
     this._tempProbe = options.tempProbe;
@@ -44,6 +47,10 @@ class FractionalStill {
 
   get heatStatus() {
     return this._heatingElement.getState();
+  }
+
+  get solenoidStatus() {
+    return this._solenoid.getState();
   }
 
   async _changePhidgetState(phidget, value) {
