@@ -58,37 +58,37 @@ class FractionalStill {
   }
 
   async openSolenoid() {
-    this.logger.debug('Attempting to open solenoid');
+    this._logger.debug('Attempting to open solenoid');
     await this._changePhidgetState(this._solenoid, true);
   }
 
   async closeSolenoid() {
-    this.logger.debug('Attempting to close solenoid');
+    this._logger.debug('Attempting to close solenoid');
     await this._changePhidgetState(this._solenoid, false);
   }
 
   async turnHeatOn() {
-    this.logger.debug('Attempting to turn heat on');
+    this._logger.debug('Attempting to turn heat on');
     await this._changePhidgetState(this._heatingElement, true);
   }
 
   async turnHeatOff() {
-    this.logger.debug('Attempting to turn heat off');
+    this._logger.debug('Attempting to turn heat off');
     await this._changePhidgetState(this._heatingElement, false);
   }
 
   async resetArm() {
-    this.logger.debug('Attempting to reset arm');
+    this._logger.debug('Attempting to reset arm');
     await this._moveArmForTime(25000, 'retract');
   }
 
   async moveArmForHearts() {
-    this.logger.debug('Attempting to set arm for hearts');
+    this._logger.debug('Attempting to set arm for hearts');
     await this._moveArmForTime(11000, 'extend');
   }
 
   async moveArmForTails() {
-    this.temperaturelogger.debug('Attempting to set arm for tails');
+    this._logger.debug('Attempting to set arm for tails');
     await this._moveArmForTime(10000, 'extend');
   }
 
