@@ -579,6 +579,10 @@ router.route('/fractionalStillGraphData').get((req,res) => {
         fractionalGraphData: newDataPoints
       })
     });
+  } else {
+      res.json({
+        fractionalGraphData: []
+      })
   }
 })
 
