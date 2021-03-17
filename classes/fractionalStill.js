@@ -79,17 +79,17 @@ class FractionalStill {
 
   async resetArm() {
     this._logger.debug('Attempting to reset arm');
-    await this._moveArmForTime(25000, 'retract');
+    await this._moveArmForTime(22000, 'retract');
   }
 
   async moveArmForHearts() {
     this._logger.debug('Attempting to set arm for hearts');
-    await this._moveArmForTime(11000, 'extend');
+    await this._moveArmForTime(10000, 'extend');
   }
 
   async moveArmForTails() {
     this._logger.debug('Attempting to set arm for tails');
-    await this._moveArmForTime(10000, 'extend');
+    await this._moveArmForTime(11000, 'extend');
   }
 
   async _moveArmForTime(moveTimeInMilliseconds, direction) {
