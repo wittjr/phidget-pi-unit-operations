@@ -690,7 +690,6 @@ router.route('/fractionalstill/heat').post((req, res) => {
 })
 .get((req, res) => {
   winston.info('checking temperature');
-  winston.info(fractionalStill);
   res.json({
     message: fractionalStill.temperature
   });
