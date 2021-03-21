@@ -1,7 +1,7 @@
 class MockPhidget {
   constructor(options) {
     this.state = false;
-    this.temperature = 0;
+    this.temperature = 20;
     this.lastTempCheck = Date.now();
     this.name = options.name;
     this.logger = options.logger;
@@ -9,7 +9,7 @@ class MockPhidget {
   }
 
   setState(value) {
-    this.logger.debug(this.name + ': Current state: ' + this.state);
+    // this.logger.debug(this.name + ': Current state: ' + this.state);
     if (this.isTempSensor && value && !this.state) {
       const currentTemp = this.temperature;
       const thisTimeCheck = Date.now();
@@ -17,15 +17,15 @@ class MockPhidget {
       const minutesSinceLastCheck = millisecondsSinceLastCheck/(1000*60);
       const timeSinceLastCheck = parseFloat(minutesSinceLastCheck.toFixed(2));
       this.lastTempCheck = thisTimeCheck;
-      this.logger.debug(this.name + ': Time since last check: ' + timeSinceLastCheck);
+      // this.logger.debug(this.name + ': Time since last check: ' + timeSinceLastCheck);
       this.temperature = currentTemp - timeSinceLastCheck;
       if (this.temperature < 0) {
         this.temperature = 0;
       }
-      this.logger.debug(this.name + ': Current temperature: ' + this.temperature);
+      // this.logger.debug(this.name + ': Current temperature: ' + this.temperature);
     }
     this.state=value;
-    this.logger.debug(this.name + ': State set to: ' + this.state);
+    // this.logger.debug(this.name + ': State set to: ' + this.state);
     return new Promise((resolve, reject) => {
       setTimeout(() => {
         resolve();
@@ -35,7 +35,7 @@ class MockPhidget {
   }
 
   getState() {
-    this.logger.debug(this.name + ': Current state: ' + this.state);
+    // this.logger.debug(this.name + ': Current state: ' + this.state);
     return this.state;
   }
 
@@ -46,11 +46,11 @@ class MockPhidget {
     const minutesSinceLastCheck = millisecondsSinceLastCheck/(1000*60);
     const timeSinceLastCheck = parseFloat(minutesSinceLastCheck.toFixed(2));
     this.lastTempCheck = thisTimeCheck;
-    this.logger.debug(this.name + ': Time since last check: ' + timeSinceLastCheck);
-    this.logger.debug(this.name + ': Current state: ' + this.state);
+    // this.logger.debug(this.name + ': Time since last check: ' + timeSinceLastCheck);
+    // this.logger.debug(this.name + ': Current state: ' + this.state);
     if (this.state) {
-      // heat 15 degrees per second
-      this.temperature = currentTemp + (timeSinceLastCheck * 20);
+      // heat 10 degrees per minute
+      this.temperature = currentTemp + (timeSinceLastCheck * 10);
     } else {
       // cool by 1 degree per second
       this.temperature = currentTemp - timeSinceLastCheck;
@@ -58,7 +58,7 @@ class MockPhidget {
     if (this.temperature < 0) {
       this.temperature = 0;
     }
-    this.logger.debug(this.name + ': Current temperature: ' + this.temperature);
+    // this.logger.debug(this.name + ': Current temperature: ' + this.temperature);
     return this.temperature
   }
 }

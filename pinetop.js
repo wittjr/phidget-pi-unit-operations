@@ -473,26 +473,10 @@ router.route('/setfractional')
     winston.info(JSON.stringify(serverRunOverview));
     serverRunOverview.notifyEmail = properties.get('smtp.notify')
     fractionalStill.startFractionalRun(fractionalGraphData,serverRunOverview,fractionalControlSystem);
-    // serverRunOverview.fractionalStillRun = new FractionalStillRun({
-    //   db: data,
-    //   logger: winston,
-    //   still: fractionalStill,
-    //   input: serverRunOverview
-    // });
     res.json({
       message:'started fractional run'
     });
   })
-
-// router.route('/fractionalstatus')
-//   .get((req,res) => {
-//     winston.debug('front end asked what is the fractional still status')
-//     // winston.debug(`server status is ${serverRunOverview.fractionalStillRun.running}`);
-//     winston.debug(`server status is ${fractionalStill.busy}`);
-//     res.json({
-//       serverFractionalStatus:fractionalStill.busy
-//     });
-//   })
 
 router.route('/fractionalgraphdata')
   .get((req,res) => {
@@ -724,6 +708,26 @@ router.route('/fractionalstill/solenoid').post((req, res) => {
     state: fractionalStill.solenoidStatus
   });
 })
+
+router.route('/fractionalstill/endrun').post((req, res) => {
+  (async () => {
+    winston.info(JSON.stringify(req.body))
+    switch (req.body.type) {
+      case 'graceful':
+        await fractionalStill.run.endRun()
+        break
+      case 'immediate':
+        await fractionalStill.run.endRunImmediate()
+        break
+      default:
+        await fractionalStill.run.endRun()
+    }
+    res.json({
+      message: fractionalStill.run.getRunStatus().message
+    });
+  })()
+})
+
 
 // ***********************************************   Phidget Test Routes   ****************************************
 // router.route('/simplifiedprogram')
