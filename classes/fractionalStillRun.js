@@ -197,12 +197,12 @@ class FractionalStillRun {
         let tempStateChanged = false;
         let targetTemp = temp + tempTolerance;
 
-        if (currentTemp >= (temp + 1) && this._still.heatStatus) {
+        if (currentTemp >= (temp + tempTolerance) && this._still.heatStatus) {
           this._setMessage(`Turning off heat`);
           tempStateChanged = true;
-          targetTemp = temp - tempTolerance;
+          targetTemp = temp;
           this._still.turnHeatOff();
-        } else if (currentTemp <= (temp - tempTolerance) && !this._still.heatStatus) {
+        } else if (currentTemp <= (temp) && !this._still.heatStatus) {
           this._setMessage(`Turning on heat`);
           targetTemp = temp + tempTolerance;
           tempStateChanged = true;
@@ -214,14 +214,14 @@ class FractionalStillRun {
         }
         // Calculate new interval
         if (tempStateChanged) {
-          interval = 1000;
+          interval = 2000;
           this._logger.debug('New temp check interval due to heat change: ' + interval);
         } else if (lastTemp > 0) {
           let tempChange = currentTemp - lastTemp;
           avgDegreesPerSecond = tempChange/(interval/1000);
           let tempLeft = Math.abs(targetTemp - currentTemp);
           interval = (Math.floor(tempLeft/avgDegreesPerSecond))/5;
-          interval = Math.floor(Math.min(Math.max(interval,1), 30)) * 1000;
+          interval = Math.floor(Math.min(Math.max(interval,1), 5)) * 1000;
           this._logger.debug('New temp check interval: ' + interval/1000 + ' seconds');
         }
         lastTemp = currentTemp;
