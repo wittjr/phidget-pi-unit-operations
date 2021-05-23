@@ -25,6 +25,7 @@ class FractionalStillRun {
   _message = 'new Fractional Still Run created';
   _type = 'temp';
   _temperatureLogInterval;
+  _solenoidCycleInterval;
   _totalTimeLimit;
   _monitorTempInterval;
   _bringToTempInterval;
@@ -98,6 +99,7 @@ class FractionalStillRun {
     // clearInterval(this._temperatureLogInterval);
     clearInterval(this._monitorTempInterval);
     clearInterval(this._bringToTempInterval);
+    clearInterval(this._solenoidCycleInterval);
   }
 
   _endFractionalRun() {
@@ -156,6 +158,7 @@ class FractionalStillRun {
         clearInterval(this._bringToTempInterval);
         if (currentTemp >= temp) {
           this._setMessage(`Target temperature, ${temp}, reached ${currentTemp}`);
+          clearInterval(this._solenoidCycleInterval);
           resolve();
           return;
         } else if (timeLimit && Date.now() > (heatStartTime + (timeLimit*60*1000))) {
@@ -180,6 +183,24 @@ class FractionalStillRun {
 
       }
       this._bringToTempInterval = setInterval(intervalFunction, interval);
+
+      // If there is no time limit, this is a preheat and we shouldn't cycle the
+      // solenoid
+      if (timeLimit == undefined) {
+        let solenoidCycleTime = 2000;
+        const solenoidInterval = () => {
+          clearInterval(this._solenoidCycleInterval);
+          if (this._still.solenoidStatus) {
+            solenoidCycleTime = 5000;
+            this._still.closeSolenoid();
+          } else {
+            solenoidCycleTime = 2000;
+            this._still.openSolenoid();
+          }
+          this._solenoidCycleInterval = setInterval(solenoidInterval, solenoidCycleTime);
+        }
+        this._solenoidCycleInterval = setInterval(solenoidInterval, solenoidCycleTime);
+      }
     });
   }
 
@@ -188,7 +209,7 @@ class FractionalStillRun {
       let interval = 1000;
       let lastTemp = 0;
       let avgDegreesPerSecond = 0;
-      const tempTolerance = 1.0;
+      const tempTolerance = 1.5;
 
       const intervalFunction = () => {
         const currentTemp = this._still.temperature;
@@ -214,15 +235,17 @@ class FractionalStillRun {
         }
         // Calculate new interval
         if (tempStateChanged) {
-          interval = 2000;
+          interval = 1000;
           this._logger.debug('New temp check interval due to heat change: ' + interval);
         } else if (lastTemp > 0) {
           let tempChange = currentTemp - lastTemp;
           avgDegreesPerSecond = tempChange/(interval/1000);
           let tempLeft = Math.abs(targetTemp - currentTemp);
           interval = (Math.floor(tempLeft/avgDegreesPerSecond))/5;
-          interval = Math.floor(Math.min(Math.max(interval,1), 5)) * 1000;
-          this._logger.debug('New temp check interval: ' + interval/1000 + ' seconds');
+          interval = Math.floor(Math.min(Math.max(interval,1), 2)) * 1000;
+          // Setting to 1 sec to try to tighten the controls
+          interval = 1000;
+          // this._logger.debug('New temp check interval: ' + interval/1000 + ' seconds');
         }
         lastTemp = currentTemp;
         this._monitorTempInterval = setInterval(intervalFunction, interval);
@@ -235,6 +258,8 @@ class FractionalStillRun {
     this._setMessage(`Heating to ${temp} and holding for ${time} minutes`);
     await this._heatToTemp(temp);
     this._setMessage(`Reached temp ${temp}, holding for ${time}`);
+    // Ensure the solenoid is open
+    await this._still.openSolenoid();
     const endTime = Date.now() + time*60*1000;
     await this._monitorTemp(temp, endTime);
     this._setMessage(`Temperature hold for ${time} minutes at ${temp} finished`);
