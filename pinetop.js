@@ -212,7 +212,9 @@ async function initializePhidgetBoards(fractionalControlSystem, potControlSystem
   var tempProbe = new phidget22.TemperatureSensor();
   tempProbe.setHubPort(1);
   tempProbe.setChannel(1);
-  tempProbe.onTemperatureChange = fractionalStill.tempChangeHandler;
+  tempProbe.onTemperatureChange = (temperature) => {
+     fractionalStill.tempChangeHandler(temperature);
+  };
   await tempProbe.open();
   tempProbe.setTemperatureChangeTrigger(0.25);
   tempProbe.setDataInterval(100);
