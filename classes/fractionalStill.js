@@ -16,8 +16,12 @@ class FractionalStill {
     this._email = options.email;
   }
 
+  log(message) {
+    this._logger.info(message);
+  }
+
   tempChangeHandler(temperature) {
-    this._logger.info('FractionalStill temperature: ' + temperature);
+    log('FractionalStill temperature: ' + temperature);
   }
 
   setStillComponents(options) {
