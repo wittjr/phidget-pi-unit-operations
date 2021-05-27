@@ -17,7 +17,9 @@ class FractionalStill {
   }
 
   tempChangeHandler(temperature) {
-    this._logger.info('FractionalStill temperature: ' + temperature);
+    if (this._busy) {
+      this._logger.info('FractionalStill temperature: ' + temperature);
+    }
   }
 
   setStillComponents(options) {
