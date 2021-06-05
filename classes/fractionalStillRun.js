@@ -32,6 +32,7 @@ class FractionalStillRun {
   _armPosition = 0;
   _runTimeLimit;  // in hours
   _stillDrainTime;  // in minutes
+  _cycleSolenoidWhileHeating;
 
   constructor(options) {
     this._logger = options.logger;
@@ -43,6 +44,7 @@ class FractionalStillRun {
     this._batchID = uuidv4();
     this._stillDrainTime = options.input.stillDrainTime; // in minutes
     this._runTimeLimit = options.input.runTimeLimit; // in hours
+    this._cycleSolenoidWhileHeating = options.input.cycleSolenoidWhileHeating;
     this.startRun();
   }
 
@@ -184,9 +186,9 @@ class FractionalStillRun {
       }
       this._bringToTempInterval = setInterval(intervalFunction, interval);
 
-      // If there is no time limit, this is a preheat and we shouldn't cycle the
+      // If there isn't time limit, this is not a preheat and we will cycle the
       // solenoid
-      if (timeLimit == undefined) {
+      if (timeLimit == undefined && this._cycleSolenoidWhileHeating) {
         let solenoidCycleTime = 2000;
         const solenoidInterval = () => {
           clearInterval(this._solenoidCycleInterval);

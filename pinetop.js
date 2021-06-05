@@ -510,12 +510,7 @@ router.route('/fractionalsummary')
   })
 
 router.route('/startFractionalRun').post((req,res) => {
-  let fractionalStillInitiatingValues = JSON.parse(req.body.fractionalStillInitiatingValues, (key, value) =>
-    isNaN(value)
-    ? value
-    : parseFloat(value)
-  );
-  winston.info(JSON.stringify(fractionalStillInitiatingValues));
+  let fractionalStillInitiatingValues = JSON.parse(req.body.fractionalStillInitiatingValues);
   if (fractionalStill.busy) {
     res.json({
       message:'fraction still already busy'
