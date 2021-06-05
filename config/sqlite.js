@@ -23,11 +23,11 @@ class Data {
         batchID text,
         operation text,
         starttime integer,
-        enttime integer,
+        endtime integer,
         input text,
         result text
       )`);
-      this.db.run(`ALTER TABLE rundata ADD endtime integer`);
+      //this.db.run(`ALTER TABLE rundata ADD endtime integer`);
     });
   }
 

@@ -218,6 +218,10 @@ class FractionalStillRun {
         let tempStateChanged = false;
         let targetTemp = temp + tempTolerance;
 
+        if (Date.now() >= endTime) {
+          resolve('Reached _monitorTemp endTime ' + endTime);
+          return;
+        }
         if (currentTemp >= (temp + tempTolerance) && this._still.heatStatus) {
           this._setMessage(`Turning off heat`);
           tempStateChanged = true;
@@ -228,10 +232,6 @@ class FractionalStillRun {
           targetTemp = temp + tempTolerance;
           tempStateChanged = true;
           this._still.turnHeatOn();
-        }
-        if (Date.now() >= endTime) {
-          resolve('Reached _monitorTemp endTime ' + endTime);
-          return;
         }
         // Calculate new interval
         if (tempStateChanged) {
