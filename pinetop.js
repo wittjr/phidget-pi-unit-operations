@@ -728,6 +728,25 @@ router.route('/fractionalstill/endrun').post((req, res) => {
   })()
 })
 
+router.route('/potstill/endrun').post((req, res) => {
+  (async () => {
+    winston.info(JSON.stringify(req.body))
+    switch (req.body.type) {
+      case 'graceful':
+        await potStill.endPotRun(serverPotOverview, potControlSystem)
+        break
+      case 'immediate':
+        await potStill.endPotRun(serverPotOverview, potControlSystem)
+        break
+      default:
+        await potStill.endPotRun(serverPotOverview, potControlSystem)
+    }
+    res.json({
+      message: "Pot still stopped"
+    });
+  })()
+})
+
 
 // ***********************************************   Phidget Test Routes   ****************************************
 // router.route('/simplifiedprogram')

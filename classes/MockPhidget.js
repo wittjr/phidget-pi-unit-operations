@@ -9,7 +9,7 @@ class MockPhidget {
   }
 
   setState(value) {
-    // this.logger.debug(this.name + ': Current state: ' + this.state);
+    this.logger.debug(this.name + ': Current state: ' + this.state);
     if (this.isTempSensor && value && !this.state) {
       const currentTemp = this.temperature;
       const thisTimeCheck = Date.now();
@@ -25,7 +25,7 @@ class MockPhidget {
       // this.logger.debug(this.name + ': Current temperature: ' + this.temperature);
     }
     this.state=value;
-    // this.logger.debug(this.name + ': State set to: ' + this.state);
+    this.logger.debug(this.name + ': State set to: ' + this.state);
     return new Promise((resolve, reject) => {
       setTimeout(() => {
         resolve();
